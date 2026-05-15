@@ -153,9 +153,13 @@ upstream). Sending a partial body wipes the unspecified fields. The flow:
 
 ### Delete a view
 
-Deletion is permanent — there is no undo, and any team member who had the
-view bookmarked will see it disappear. Treat this like dropping a row from
-a shared table:
+Deletion is destructive and immediately removes the view from the shared
+list — any team member who had the view bookmarked will see it disappear.
+Depending on the host application, the user may be offered a one-click
+restore action shortly after the delete (the SigNoz Assistant captures a
+snapshot and exposes a `restore` action), but treat that as a recovery
+affordance, not a substitute for getting the delete right. Treat this like
+dropping a row from a shared table:
 
 1. **List to locate.** Call `signoz:signoz_list_views` to find the view
    by name. If `sourcePage` is unknown, search all three signals.
@@ -212,6 +216,32 @@ After any write (create / update / delete), include in your reply:
   time. When in doubt, omit the link and report the UUID + `sourcePage`.
 - For updates, what changed (one-line diff).
 - For deletes, an explicit "deleted" confirmation with the name.
+
+## Follow-up suggestions
+
+After a view operation, you may surface up to 3 follow-up intents that
+match what just happened. The host application renders them — follow
+the host's UI rendering rules for the exact mechanism. Use your
+judgment about what's natural for the user's context; do not pad to 3.
+
+Two anti-rules that override your judgment:
+
+- **Read-only stays read-only at the chip surface.** After list / get /
+  find, do not offer chips that propose a write (e.g. "Update this
+  view", "Delete this view"). That contradicts the read-only stop rule
+  in *Reporting back* below. Chips that re-run the view's underlying
+  query are fine — those stay on the read path. If the user's next
+  message names an update or delete, route from there.
+- **Do not duplicate host-injected actions.** If the host offers a
+  restore action after a delete (the SigNoz Assistant does), do not
+  also surface restore as a follow-up — it would render twice.
+
+When the user is purely exploring ("just listing my views", "what's
+in here?") and signals no further intent, skip follow-ups entirely.
+No chips beat wrong chips.
+
+Describe follow-ups by *user intent*, not by tool or skill name. The
+label the user clicks should read like the user's next prompt.
 
 Read-only operations (list, get) should report concisely — name, id,
 sourcePage, filter expression, panel type — and stop. Don't narrate
