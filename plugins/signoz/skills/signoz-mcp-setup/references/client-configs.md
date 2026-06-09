@@ -33,11 +33,28 @@ Use these shapes for SigNoz Cloud hosted MCP URLs such as
 `https://mcp.us.signoz.cloud/mcp` and self-hosted HTTP MCP URLs such as
 `http://localhost:8000/mcp`.
 
-### Bundled Claude Code and Codex plugin
+### Bundled Claude Code plugin
 
-Update `.mcp.json` in the SigNoz plugin root using the concrete URL rule from
-`mcp-settings.md`. Codex does not reliably expand shell-style environment
-defaults in plugin MCP URLs.
+In `.signoz_claude_mcp.json` in the SigNoz plugin root, replace only the `url`
+value with the resolved MCP endpoint (concrete URL rule from `mcp-settings.md`).
+Leave the `type` field and other settings unchanged.
+
+```json
+{
+  "mcpServers": {
+    "signoz": {
+      "type": "http",
+      "url": "https://mcp.us.signoz.cloud/mcp"
+    }
+  }
+}
+```
+
+### Bundled Codex plugin
+
+In `.mcp.json` in the SigNoz plugin root, replace only the `url` value with the
+resolved MCP endpoint (concrete URL rule from `mcp-settings.md`). Codex does not
+reliably expand shell-style environment defaults in plugin MCP URLs.
 
 ```json
 {
@@ -51,9 +68,9 @@ defaults in plugin MCP URLs.
 
 ### Bundled Cursor plugin
 
-Update `mcp.json` in the SigNoz plugin root using the concrete URL rule from
-`mcp-settings.md`. Do not rely on shell-style environment defaults in Cursor
-plugin MCP URLs.
+Update `.signoz_cursor_mcp.json` in the SigNoz plugin root using the concrete URL
+rule from `mcp-settings.md`. Do not rely on shell-style environment defaults in
+Cursor plugin MCP URLs.
 
 ```json
 {
@@ -374,7 +391,10 @@ Edit `opencode.json` or `opencode.jsonc`.
 - Claude Desktop: restart or reconnect the custom connector, then complete
   authentication.
 - Claude Code: run `/mcp`, select `signoz`, and complete authentication.
-- Codex: run `codex mcp login signoz`, then verify with `/mcp`.
+- Codex (SigNoz Cloud): run `codex mcp login signoz`, then verify with `/mcp`.
+- Codex (self-hosted HTTP): no OAuth step unless the server runs with
+  `OAUTH_ENABLED=true`; skip `codex mcp login` and verify the already-authenticated
+  `signoz` server with `/mcp`.
 - Gemini CLI: run `/mcp auth signoz`.
 - Windsurf: reload and complete authentication when prompted.
 - Zed: reload after stdio config changes.
