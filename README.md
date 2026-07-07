@@ -1,16 +1,16 @@
 # SigNoz Agent Skills
 
 Official SigNoz skills and MCP configuration for Claude Code, Codex, Cursor,
-Gemini CLI, Devin CLI, and the [skills.sh](https://skills.sh) ecosystem. The MCP setup skill also
+Gemini CLI, Devin CLI, Antigravity CLI, and the [skills.sh](https://skills.sh) ecosystem. The MCP setup skill also
 includes client-specific recipes for VS Code/GitHub Copilot, Claude Desktop,
-Gemini CLI, Devin CLI, Windsurf, Zed, Antigravity, OpenCode, and generic HTTP
+Gemini CLI, Devin CLI, Windsurf, Zed, Antigravity CLI, OpenCode, and generic HTTP
 MCP clients.
 
 ## Skills
 
 | Skill | Description |
 |-------|-------------|
-| [signoz-mcp-setup](plugins/signoz/skills/signoz-mcp-setup/SKILL.md) | Initialize or repair the SigNoz MCP server configuration for Claude Code, Codex, Cursor, VS Code/GitHub Copilot, Claude Desktop, Gemini CLI, Devin CLI, Windsurf, Zed, Antigravity, OpenCode, or another MCP client. |
+| [signoz-mcp-setup](plugins/signoz/skills/signoz-mcp-setup/SKILL.md) | Initialize or repair the SigNoz MCP server configuration for Claude Code, Codex, Cursor, VS Code/GitHub Copilot, Claude Desktop, Gemini CLI, Devin CLI, Windsurf, Zed, Antigravity CLI, OpenCode, or another MCP client. |
 | [signoz-creating-alerts](plugins/signoz/skills/signoz-creating-alerts/SKILL.md) | Create SigNoz alert rules for threshold breaches, error rates, latency, anomaly detection, and absent-data conditions across metrics, logs, and traces. |
 | [signoz-explaining-alerts](plugins/signoz/skills/signoz-explaining-alerts/SKILL.md) | Explain and interpret an existing SigNoz alert rule's configuration, evaluation behavior, notification routing, and recent fire frequency. |
 | [signoz-investigating-alerts](plugins/signoz/skills/signoz-investigating-alerts/SKILL.md) | Diagnose why a SigNoz alert fired by correlating its signal with neighbor metrics, traces, and logs around the fire window, and ranking likely causes. |
@@ -180,10 +180,43 @@ For SigNoz Cloud, start a new session and run `devin mcp login signoz` to
 complete OAuth. For self-hosted SigNoz, no OAuth step is needed unless the
 server runs with `OAUTH_ENABLED=true`.
 
+### Antigravity CLI
+
+Install directly from this repository — Antigravity CLI stages the repo root as
+a native plugin (`plugin.json` + `mcp_config.json` + `skills/`):
+
+```sh
+agy plugin install https://github.com/SigNoz/agent-skills
+agy plugin list   # confirm signoz is loaded
+```
+
+Reinstall with the same command to update. Antigravity registers the `signoz`
+MCP server (default SigNoz Cloud `us` endpoint, `https://mcp.us.signoz.cloud/mcp`)
+and the SigNoz skills automatically. The installed plugin is staged at
+`~/.gemini/antigravity-cli/plugins/signoz/`.
+
+**Authenticate (SigNoz Cloud).** In the `agy` prompt, type `/mcp`, select the
+`signoz` server, and choose **Authenticate** to start the OAuth flow. Complete
+it in the browser (over SSH, `agy` prints an authorization URL to paste in and a
+code to paste back). Self-hosted endpoints need no OAuth unless the server runs
+with `OAUTH_ENABLED=true`.
+
+**Change the endpoint.** In the `agy` prompt, run the setup skill with your
+target — a SigNoz Cloud region or a self-hosted MCP URL:
+
+```
+/signoz:signoz-mcp-setup <region>        # e.g. us, us2, eu, eu2, in, in2
+/signoz:signoz-mcp-setup <mcp-url>       # e.g. http://localhost:8000/mcp
+```
+
+This rewrites `serverUrl` in the installed `mcp_config.json`. Then run `/mcp` to
+reload and re-authenticate (self-hosted needs no OAuth unless the server runs
+with `OAUTH_ENABLED=true`). You can also edit the `serverUrl` value directly.
+
 ### Other MCP Clients
 
 The setup skill includes native config recipes for VS Code/GitHub Copilot,
-Claude Desktop, Gemini CLI, Devin CLI, Windsurf, Zed, Antigravity, OpenCode,
+Claude Desktop, Gemini CLI, Devin CLI, Windsurf, Zed, Antigravity CLI, OpenCode,
 and generic HTTP MCP clients. These clients do not all consume this plugin
 automatically; install or copy the skill where your client supports skills, or
 use the client-specific setup snippets in the skill as a reference.
@@ -209,7 +242,9 @@ npx skills add SigNoz/agent-skills --skill signoz-writing-clickhouse-queries    
 ├── .cursor-plugin/marketplace.json         # Cursor marketplace
 ├── .devin-plugin/plugin.json               # Devin CLI plugin manifest
 ├── gemini-extension.json                   # Gemini CLI extension manifest
-├── skills -> plugins/signoz/skills         # Gemini CLI & Devin CLI skills (symlink)
+├── plugin.json                             # Antigravity plugin manifest (native, repo root)
+├── mcp_config.json                         # Antigravity MCP config (serverUrl)
+├── skills -> plugins/signoz/skills         # Gemini CLI, Devin CLI & Antigravity skills (symlink)
 ├── plugins/signoz/
 │   ├── .codex-plugin/plugin.json           # Codex plugin manifest
 │   ├── .claude-plugin/plugin.json          # Claude Code plugin manifest
