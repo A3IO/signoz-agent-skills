@@ -32,7 +32,7 @@ npx skills add https://github.com/anthropics/skills --skill skill-creator
 - **Schema reference.** The MCP server is the source of truth for tool input schemas, alert/dashboard JSON shape, and validation rules. Read the `signoz://*` resources rather than transcribing schema into a skill — duplicated schema rots out of sync.
 - **Reference files.** Move material >300 lines into `references/`, `scripts/`, or `assets/`. Any reference file longer than 100 lines must start with a `## Contents` table-of-contents.
 - **SKILL.md length.** Keep the body under 500 lines. Use progressive disclosure — link to specific reference files with a clear "read this when X" pointer rather than burying detail inline.
-- **Plugin manifests.** Keep `plugins/signoz/.codex-plugin/plugin.json` and `plugins/signoz/.cursor-plugin/plugin.json` in sync with the Claude manifest when adding or removing skills.
+- **Plugin manifests.** Keep `plugins/signoz/.codex-plugin/plugin.json` and `plugins/signoz/.cursor-plugin/plugin.json` in sync with the Claude manifest when adding or removing skills. The **Antigravity** plugin is native to the **repo root**: `plugin.json` (marker) + `mcp_config.json` (MCP registration, remote key `serverUrl`) + the root `skills` symlink. This lets `agy plugin install https://github.com/SigNoz/agent-skills` stage the repo root as a native Antigravity plugin. Antigravity's `plugin.json` schema is strict (`name` + `description` only, `additionalProperties: false`), so it intentionally carries **no `version`** and is not part of the CalVer bump. Do not point the root `mcp_config.json` at `${...}` interpolation — Antigravity does not resolve it (unlike `gemini-extension.json`, which keeps its `${SIGNOZ_MCP_URL}` prompt for Gemini CLI).
 
 ### Further reading
 
@@ -57,7 +57,7 @@ Users of Claude Code, Codex, and Cursor receive updates based on these versions.
 
 ### Auto-bump workflow
 
-A GitHub Actions workflow (`.github/workflows/auto-version-bump.yml`) automatically bumps all three manifests on push to `main`. It detects which plugins have changed files and sets the version to today's date (or appends a micro suffix for multiple bumps in the same day).
+A GitHub Actions workflow (`.github/workflows/auto-version-bump.yml`) automatically bumps all three manifests on push to `main`. It detects which plugins have changed files and sets the version to today's date (or appends a micro suffix for multiple bumps in the same day). The root `gemini-extension.json` and `.devin-plugin/plugin.json` manifests mirror the `signoz` plugin and are bumped in lockstep with it.
 
 **You do not need to manually bump versions** — the workflow handles it when your PR is merged to `main`.
 
