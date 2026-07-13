@@ -118,12 +118,13 @@
       "id": 7,
       "eval_name": "target-dashboard-on-second-page",
       "prompt": "Add an error-rate panel to my 'Payments API' dashboard.",
-      "expected_output": "In an offline simulated tool trace using the attached fixture, the first signoz_list_dashboards response has hasMore=true and no match. Agent follows pagination.nextOffset, finds Payments API there, fetches it, and only then plans the modification.",
+      "expected_output": "In an offline simulated tool trace using the attached fixture, the first signoz_list_dashboards response has hasMore=true and no match. Agent follows pagination.nextOffset, finds Payments API, fetches it, and plans the new panel while preserving Request Rate.",
       "files": ["evals/files/target-on-second-page.json"],
       "expectations": [
         "Agent does not conclude Payments API is missing after the first page",
         "The simulated trace invokes signoz_list_dashboards again with offset equal to pagination.nextOffset using an accepted integer or string value",
         "The simulated trace invokes signoz_get_dashboard only for the second-page Payments API match",
+        "The modification plan preserves the fetched Request Rate widget",
         "Agent did not call signoz_update_dashboard (read-only eval constraint respected)"
       ]
     },
@@ -163,6 +164,7 @@
         "New variable is DYNAMIC and uses the discovered deployment.environment attribute",
         "New variable has a UUID-shaped id and its map key and name are both deployment_environment",
         "Consumer Lag and Throughput filters reference $deployment_environment, while Broker Health does not",
+        "The prepared dashboard mutates widgets and contains no legacy panels field",
         "The simulated trace successfully dry-runs both complete changed queries with deployment_environment=prod",
         "Existing variables, layout, Broker Health, and all unrelated supported state remain semantically unchanged",
         "Agent did not call signoz_update_dashboard (read-only eval constraint respected)"
@@ -182,6 +184,17 @@
         "Overview panelMap contains Request Rate and the new Error Rate panel only; Capacity panelMap still contains CPU only",
         "The simulated trace successfully dry-runs the supplied complete Error Rate query before accepting the mutation plan",
         "Agent did not call signoz_update_dashboard (read-only eval constraint respected)"
+      ]
+    },
+    {
+      "id": 12,
+      "eval_name": "unsupported-default-range-and-refresh",
+      "prompt": "Set my API Monitoring dashboard's default range to 7 days and auto-refresh it every 30 seconds.",
+      "expected_output": "Agent explains that dashboard update payloads do not persist default time range or refresh settings and that panels follow the viewer-selected global range. It does not add timeRange, defaultTimeRange, or refresh fields and does not call signoz_update_dashboard.",
+      "files": [],
+      "expectations": [
+        "Agent explains that time range and refresh are viewer controls rather than persisted dashboard fields",
+        "Agent does not call signoz_update_dashboard or invent timeRange, defaultTimeRange, or refresh fields"
       ]
     }
   ]
