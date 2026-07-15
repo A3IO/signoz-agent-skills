@@ -20,11 +20,13 @@ Antigravity CLI, or OpenCode, read
 Silently determine `signoz-server-state`, **only after the client is known**
 (see `SKILL.md` Step 1 — identify the client before checking state):
 
-1. If `signoz_*` MCP tools are available, try a lightweight read-only
-   call such as `signoz_search_docs` for `mcp setup` or
-   `signoz_list_services` with a small lookback.
-2. If the call returns SigNoz-specific content, state is **working**.
-3. If the call fails, returns no tools, or only generic/empty content:
+1. If `signoz_*` MCP tools are available, call
+   `signoz_list_services(timeRange: "1h", limit: 1)`. Do not use
+   docs tools (`signoz_search_docs` or `signoz_fetch_doc`) as connectivity
+   probes.
+2. If the call succeeds, including with an empty service list, state is
+   **working**.
+3. If the call fails, returns no tools, or cannot be attempted:
    - **Claude Code, Codex, or Cursor bundled plugin install** — read the
      plugin registration files below.
    - **Any other client** — do not read or file-search for the bundled

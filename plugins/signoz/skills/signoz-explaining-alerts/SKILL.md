@@ -82,13 +82,25 @@ guesses.
 
 ### Step 3: Pull a one-line fire-frequency summary
 
-Call `signoz_get_alert_history` with a 7-day lookback, `state: "firing"`,
-`order: "desc"`, and a large limit. If a page is full or the response includes
-a completeness note with `hasMore: true`, continue with `offset`; stop when the
-note reports `hasMore: false` or the page is short.
-Derive a single line from the complete set:
+First call `signoz_get_alert_history` with `timeRange: "7d"`,
+`state: "firing"`, `order: "desc"`, and a large limit. Continue only when
+`data.nextCursor` exists (the completeness note also reports `hasMore: true`):
+pass that value as `cursor`, replace `timeRange` with the note's resolved
+absolute `start` and `end`, and preserve the same state, filter, and order.
+Stop when `nextCursor` is absent / the note reports `hasMore: false`. Never use
+`offset` or infer completeness from page fullness.
+Derive a single rule-level line from the complete set. History rows are emitted
+per label-group `fingerprint`, so never equate row count with alert-fire count.
+Count distinct rule transitions where `overallStateChanged: true` and
+`overallState: "firing"` (deduplicate rows from the same transition timestamp):
 
 > Fired N times in the last 7d (last fire: <relative-time>).
+
+If the user asks about a particular service/host/group instead, partition by
+`fingerprint` and count that series' rows where `stateChanged: true` and
+`state: "firing"`; include its labels and call the result a **series fire**, not
+a rule-wide fire. A grouped rule can have many series transitions while the
+overall rule remains continuously firing.
 
 If the alert never fired in the window, say so explicitly:
 "Has not fired in the last 7d." If the alert is disabled, mention that
@@ -180,12 +192,19 @@ Describe timing as "checks every `<frequency>` over the last
 `<evalWindow>`", and mention that with `at_least_once` a single-point
 breach triggers, while `all_the_times` requires the full window.
 
-**3. Where it notifies** — channels per tier (resolved by name from the fully
-paginated `signoz_list_notification_channels` result if needed), `notificationSettings.groupBy`
-(how notifications are bundled), `renotify` (interval + which states),
-`usePolicy` (label-based routing). Skip this section entirely if
-notification settings are vanilla and the user already saw the channel
-in the TL;DR.
+**3. Where it notifies** — decode effective routing, not just fields in
+isolation. If `notificationSettings.usePolicy` is true, say that org policy
+matches the rule/static/dynamic labels and that threshold channels are ignored.
+Otherwise, a v2 `threshold_rule` or `promql_rule` routes only through each
+threshold tier's `channels`. If a tier has no channels, call it unrouted or
+misconfigured; never substitute top-level `preferredChannels` as a per-tier
+fallback. A v1 `anomaly_rule` has no thresholds or notification settings, so
+its direct routing comes from `preferredChannels`. Treat that field as routing
+only when the fetched rule schema defines it, not as a cross-schema fallback.
+Resolve names from the fully paginated `signoz_list_notification_channels`
+result if needed. Also explain `notificationSettings.groupBy` (bundling) and
+`renotify` (interval + states). Skip this section only when routing is already
+unambiguous in the TL;DR.
 
 **4. Notable concerns** — flag *only* what's non-default and worth the
 user's attention. Don't list every absent field; focus on the
@@ -265,9 +284,9 @@ wrong chips.
 
 - **Fetch before explaining.** Always call `signoz_get_alert`. Do not
   base explanations on the rule name or list response alone.
-- **Always pull fire history.** The one-line frequency summary is
-  cheap (one MCP call) and grounds the explanation. Skip it only if
-  the alert is disabled.
+- **Always pull fire history.** The one-line frequency summary grounds the
+  explanation, including for disabled alerts: disabled rules can still have
+  earlier fires in the lookback.
 - **Decode, don't dump.** Translate `op`, `matchType`, filter
   expressions, and query JSON into operational language. Show raw JSON
   only if the user asks.
@@ -299,8 +318,8 @@ wrong chips.
 2. `signoz_get_alert id=42` → traces formula (A errored spans / B
    total spans × 100), single critical threshold at 5%, `op=1`,
    `matchType=1`, channel `pagerduty-oncall`.
-3. `signoz_get_alert_history id=42 lookback=7d` → fired 3 times,
-   last fire 2h ago.
+3. `signoz_get_alert_history id=42 timeRange=7d state=firing order=desc`
+   → fired 3 times, last fire 2h ago.
 4. Replies:
 
    > **TL;DR**: Fires when checkout error rate (errored spans / total

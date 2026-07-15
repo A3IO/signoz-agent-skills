@@ -5,7 +5,7 @@
       "id": 0,
       "eval_name": "add-panel-to-existing-dashboard",
       "prompt": "Add a traces panel showing p99 latency by service to my 'API Monitoring' dashboard. Group by service.name.",
-      "expected_output": "Agent resolves 'API Monitoring' to a UUID by paginating dashboard results, fetches it, reads the required dashboard and traces query resources, builds a complete graph widget with a UUID, appends it within the 12-column layout, preserves supported non-target state, and dry-runs the exact query before preparing the full update.",
+      "expected_output": "Agent resolves 'API Monitoring' to a UUID by paginating dashboard results, fetches it, reads the required dashboard and traces query resources, builds a complete graph widget with a UUID, appends it within the 12-column layout, preserves supported non-target state, and dry-runs the exact query before preparing the full update. The prepared dashboard update keeps the dashboard/editor groupBy shape, while the actual dry-run translates it to the Query Builder v5 execution shape.",
       "files": [],
       "expectations": [
         "Updated dashboard has exactly one more widget than original",
@@ -13,11 +13,12 @@
         "New widget includes id, panelTypes, title, query, selectedLogFields, selectedTracesFields, thresholds, and contextLinks",
         "New widget query includes queryType and the complete active Builder payload required by the MCP resources; inactive query payloads need not be authored",
         "New widget's id is a valid UUID",
-        "New widget's query uses 'service.name' (OTel naming) in groupBy, not 'service'",
+        "New widget's query prepared for signoz_update_dashboard keeps groupBy in dashboard form with key='service.name', dataType='string', and type='resource' (not the execution-only aliases)",
         "Layout has one new entry whose 'i' matches the new widget's id",
         "When rows exist, the new widget appears exactly once in the intended panelMap row and its x, y, w, h match the top-level layout entry",
         "All supported non-target widget and variable semantics remain present",
-        "Agent calls signoz_execute_builder_query for the new panel before preparing or calling signoz_update_dashboard, and the translated builder query retains its name A",
+        "The actual signoz_execute_builder_query call maps queryName='A' to name='A' and dataSource='traces' to signal='traces', and maps groupBy to name='service.name', fieldDataType='string', fieldContext='resource', signal='traces'",
+        "No groupBy entry passed to signoz_execute_builder_query contains the dashboard-only key, dataType, or type fields",
         "Agent did not call signoz_update_dashboard (read-only eval constraint respected)"
       ]
     },
@@ -63,7 +64,7 @@
         "CPU Usage widget is absent from widgets[], layout[], and panelMap",
         "A new Error Rate widget is present with all required v5 fields and groupBy contains 'service.name'",
         "Net widget count equals original count (one removed, one added)",
-        "Agent dry-runs the new Error Rate panel with a lossless full payload that preserves query names A, B, and F1 before preparing the update",
+        "Agent dry-runs the new Error Rate panel with builder_query envelopes named A and B plus a sibling builder_formula envelope named F1 before preparing the update",
         "Transcript indicates a single planned update_dashboard call (changes batched, not iterative)",
         "All supported non-target widget, variable, and panelMap semantics are preserved",
         "Agent did not call signoz_update_dashboard (read-only eval constraint respected)"
@@ -195,6 +196,20 @@
       "expectations": [
         "Agent explains that time range and refresh are viewer controls rather than persisted dashboard fields",
         "Agent does not call signoz_update_dashboard or invent timeRange, defaultTimeRange, or refresh fields"
+      ]
+    },
+    {
+      "id": 13,
+      "eval_name": "list-panel-execution-and-update-wrapper-contract",
+      "prompt": "Using the attached offline fixture, change the Recent Errors list on Error Explorer to 25 rows and sort oldest first, then apply the update.",
+      "expected_output": "Agent fetches the complete dashboard, changes only pageSize and orderBy in saved dashboard state, executes the canonical V5 equivalent against the stub, and calls the stubbed update tool with the required {id,dashboard} wrapper.",
+      "files": ["evals/files/update-payload-contract.json"],
+      "expectations": [
+        "The actual signoz_execute_builder_query call maps filters.items to filter.expression, pageSize=25 to limit=25, orderBy to order with key.name='timestamp' and direction='asc', and selectColumns to canonical selectFields",
+        "The dry-run builder_query.spec contains none of filters, pageSize, orderBy, selectColumns, queryName, or dataSource, and no groupBy/selectFields entry contains dashboard-only key/dataType/type; canonical order[].key is allowed",
+        "The actual signoz_update_dashboard call has top-level id='66666666-6666-4666-8666-666666666666' and a nested dashboard object; title, widgets, layout, and variables are not flattened beside id",
+        "The nested dashboard is the complete fetched state and retains dashboard/editor filters, pageSize=25, orderBy=[{columnName:'timestamp',order:'asc'}], and selectColumns",
+        "The update is called only after the canonical dry-run succeeds"
       ]
     }
   ]
