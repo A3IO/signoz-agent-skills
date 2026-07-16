@@ -104,6 +104,11 @@ Merge the planned changes into the full dashboard JSON from Step 2.
   what the user requested, and compare semantics after MCP normalization. Do not
   drop unrelated widgets, variables, layout items, or panelMap entries.
 
+- **Preserve widget/layout identity.** Keep non-row widget/layout IDs bijective;
+  add/remove both entries together. Row widgets need no layout entry; preserve
+  matching row layout entries when present. Reuse widget IDs verbatim. Strip any
+  literal `"__dropping-elem__"` widget/layout id leaked by the UI drag state.
+
 - **Read schemas before every update.** Read all required and applicable
   conditional resources named by `signoz_update_dashboard`. For Query Builder,
   also read `signoz://metrics-aggregation-guide`,
@@ -167,8 +172,11 @@ Merge the planned changes into the full dashboard JSON from Step 2.
 panel, read the compact
 [`dashboard-to-query-builder-v5` reference](./references/dashboard-to-query-builder-v5.md).
 When the execution schema can represent the panel, call
-`signoz_execute_builder_query` with the translated payload. Use representative
-variable values and keep editor aliases unchanged in saved state.
+`signoz_execute_builder_query` with the translated payload. Dry-run over a short
+absolute Unix-ms window — usually the last 30-60 minutes, never the panel's
+display range by reflex; apply the reference's dry-run hygiene rules before
+widening or retrying after a timeout. Use representative variable values and
+keep editor aliases unchanged in saved state.
 
 If the reference's safety gate finds an unsupported execution field, report the
 panel as unvalidated and continue only after explicit acceptance. Server or
@@ -222,6 +230,9 @@ Briefly tell the user what was changed. Offer further modifications if relevant.
 - **Identifiers**: Use UUIDs for new widget and variable IDs. Reuse the widget ID
   as `layout.i`; keep each variable map key identical to its human-readable `name`,
   and keep query names such as `A`, `B`, and `F1` stable.
+- **Real dashboard IDs only**: Never send a sentinel such as `"unused"` as a
+  dashboard UUID. Resolve it through `signoz_list_dashboards` and
+  `signoz_get_dashboard` first.
 - **Scope boundary**: This skill modifies existing dashboards. Hand new-dashboard
   requests to `signoz-creating-dashboards`.
 

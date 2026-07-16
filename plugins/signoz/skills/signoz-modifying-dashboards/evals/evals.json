@@ -18,6 +18,8 @@
         "When rows exist, the new widget appears exactly once in the intended panelMap row and its x, y, w, h match the top-level layout entry",
         "All supported non-target widget and variable semantics remain present",
         "The actual signoz_execute_builder_query call maps queryName='A' to name='A' and dataSource='traces' to signal='traces', and maps groupBy to name='service.name', fieldDataType='string', fieldContext='resource', signal='traces'",
+        "The actual dry-run outer query contains start and end as JSON integer Unix-millisecond values",
+        "Every groupBy entry passed to signoz_execute_builder_query has a non-empty name",
         "No groupBy entry passed to signoz_execute_builder_query contains the dashboard-only key, dataType, or type fields",
         "Agent did not call signoz_update_dashboard (read-only eval constraint respected)"
       ]
@@ -209,7 +211,22 @@
         "The dry-run builder_query.spec contains none of filters, pageSize, orderBy, selectColumns, queryName, or dataSource, and no groupBy/selectFields entry contains dashboard-only key/dataType/type; canonical order[].key is allowed",
         "The actual signoz_update_dashboard call has top-level id='66666666-6666-4666-8666-666666666666' and a nested dashboard object; title, widgets, layout, and variables are not flattened beside id",
         "The nested dashboard is the complete fetched state and retains dashboard/editor filters, pageSize=25, orderBy=[{columnName:'timestamp',order:'asc'}], and selectColumns",
+        "The fetched and updated widget contextLinks is an object with linksData=[] and is never converted to a bare array",
         "The update is called only after the canonical dry-run succeeds"
+      ]
+    },
+    {
+      "id": 14,
+      "eval_name": "promql-envelope-timeout-retry",
+      "prompt": "Using the attached offline fixture, add a PromQL 'Up Targets' graph panel using sum(up) to my Prometheus Overview dashboard. I am viewing the dashboard over the last 12 hours.",
+      "expected_output": "Agent preserves the dashboard's PromQL widget style, dry-runs the new panel with the PromQL execution envelope over a short absolute Unix-ms window, and responds to the fixture's timeout by retrying with a materially cheaper query before preparing the saved widget shape.",
+      "files": ["evals/files/promql-timeout-retry.json"],
+      "expectations": [
+        "The first and second signoz_execute_builder_query calls each use one compositeQuery.queries entry with type='promql' and a spec whose query is the requested panel's sum(up) PromQL; neither call uses widget query.promql arrays under compositeQuery or type='promql_query'",
+        "Both dry-runs use absolute JSON integer Unix-ms start and end values and minutes-scale windows rather than the dashboard's 12-hour display range",
+        "After the first dry-run times out, the second call is materially cheaper in an objectively comparable way: a strictly smaller end - start duration, or the same window where both calls set an explicit PromQL step and the second step is strictly larger; byte inequality or JSON key reordering alone does not satisfy this expectation",
+        "The prepared saved widget keeps queryType='promql' and the dashboard/editor query.promql[] shape rather than the execution envelope",
+        "Agent does not call signoz_update_dashboard (read-only eval constraint respected)"
       ]
     }
   ]

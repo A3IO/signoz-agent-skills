@@ -310,6 +310,11 @@ core resources before authoring widget JSON.
 Add signal-specific resources as needed:
 
 - Metrics (PromQL): `signoz://promql/instructions`.
+  Saved PromQL may reference declared dashboard `$var` variables, but
+  `signoz_execute_builder_query` does not expand them: substitute representative
+  literals only for dry-runs, never in saved panels. Grafana-only
+  `$__rate_interval` / `$__interval` are invalid. Dotted OTel metric names use
+  Prometheus 3.x UTF-8 selectors such as `{"metric.name.with.dots"}`.
 - Metrics (ClickHouse): `signoz://dashboard/clickhouse-schema-for-metrics`
   + `signoz://dashboard/clickhouse-metrics-example`.
 - Metrics (Query Builder aggregation rules):
@@ -333,6 +338,18 @@ refresh interval. Panels follow the viewer-selected global range. If the user
 asks for a specific window, mention that range in the final handoff instead of
 inventing `timeRange`, `defaultTimeRange`, or `refresh` fields. Do not encode a
 PromQL range selector inside a Builder query.
+
+Use SigNoz enums and JSON types exactly. `panelTypes: "graph"` means time series
+(never Grafana `timeseries`); variable types are uppercase (`DYNAMIC`, `CUSTOM`).
+PromQL `queryType` is valid only for graph, value, bar, and histogram panels;
+table and pie accept `builder` or `clickhouse_sql`; list requires `builder`.
+`softMax` / `softMin` are numbers, `contextLinks` is `{"linksData": [...]}`, and
+saved `having` is an array of clause objects; defer full shapes to the resources.
+
+Keep non-row widget/layout IDs bijective; create/remove both entries together.
+Row widgets need no layout entry; preserve matching row layout entries when
+present. During import or rebuild, strip the UI drag artifact id
+`"__dropping-elem__"` from both arrays.
 
 **Defaults the skill applies (and surfaces in the preview):**
 
@@ -380,8 +397,10 @@ For every query-bearing panel, read the compact
 [`dashboard-to-query-builder-v5` reference](./references/dashboard-to-query-builder-v5.md).
 When the execution schema can represent the panel, call
 `signoz_execute_builder_query` with the translated payload, never widget JSON.
-Use representative variable values and keep editor aliases unchanged in
-`signoz_create_dashboard`.
+Dry-run over a short absolute Unix-ms window — usually the last 30-60 minutes,
+never the panel's display range by reflex; apply the reference's dry-run hygiene
+rules before widening or retrying after a timeout. Use representative variable
+values and keep editor aliases unchanged in `signoz_create_dashboard`.
 
 If the reference's safety gate finds an unsupported execution field, report the
 panel as unvalidated and continue only after explicit user acceptance. Server or
@@ -449,7 +468,8 @@ accepted absent telemetry. Skip row panels and validate their shape against
   `signoz://dashboard/*` MCP resources. Required widget and `queryData`
   fields are listed in `signoz://dashboard/widgets-instructions` and
   `signoz://dashboard/widgets-examples`. Never wrap arrays/objects in
-  `JSON.stringify`.
+  `JSON.stringify`; enforce the widget/layout bijection, field types, and enums
+  from Step 3b-ii.4.
 - **Scope boundary** This skill creates dashboards. The moment the
   user asks to modify, edit, rearrange, or extend an existing dashboard
   — including immediately after import — hand off to
