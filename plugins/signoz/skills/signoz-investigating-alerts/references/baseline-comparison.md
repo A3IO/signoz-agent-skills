@@ -57,6 +57,10 @@ guide for the chosen signal. Keep the outer `query`, `formatOptions`, and
             "signal": "traces",
             "disabled": false,
             "stepInterval": 60,
+            "limit": 100,
+            "order": [
+              {"key": {"name": "p99(duration_nano)"}, "direction": "desc"}
+            ],
             "having": { "expression": "" },
             "filter": { "expression": "service.name = 'checkout'" },
             "aggregations": [
@@ -75,6 +79,19 @@ guide for the chosen signal. Keep the outer `query`, `formatOptions`, and
   }
 }
 ```
+
+Keep the same positive limit and Query Builder v5 `order` in the fire and
+baseline requests. For time series, the limit ranks groups over the whole
+window, so a short-lived local spike can be outside the top N. Dashboard
+`orderBy` is not valid in this execution payload. For a formula alert, first
+replay the stored component limits exactly. If any formula input is below
+10000, run a second fire/baseline comparison with that input raised to 10000;
+base limits are applied before formula evaluation, so independent top-N inputs
+can hide the group that should have fired. Find inputs by inspecting every
+formula expression, including formulas with `disabled: true`, and following
+formula references to all `builder_query` leaves. This dependency walk changes
+only the comparison bounds; it does not prove deterministic formula-to-formula
+evaluation order.
 
 ## Computing the delta
 

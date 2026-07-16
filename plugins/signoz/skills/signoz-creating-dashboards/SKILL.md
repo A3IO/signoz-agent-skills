@@ -385,6 +385,19 @@ required fields, panel-type-specific shapes, the canonical
 `filters.items[].key.id` form, operator casing, and common write-shape
 errors. Re-skim it before serialising any custom widget JSON.
 
+Every dashboard `queryData` and `queryFormulas` entry must carry a positive `limit` and non-empty editor-model
+`orderBy` (`columnName` + `order`). Raw list and trace-request panels default to 100 with timestamp-desc ordering
+(raw logs add id); a deliberately smaller list page may match `limit` to `pageSize`. Aggregate panels use 100 with
+the primary aggregation desc. Formula outputs use 100 with `__result desc`; every referenced base query uses 10000
+because base limits apply before formula evaluation. Find those inputs from every formula expression, including
+formulas with `disabled: true`, following references until every base `builder_query` leaf is reached. This dependency
+walk chooses bounds only; it does not establish deterministic formula-to-formula evaluation order, so dry-run the
+complete composite payload. During translation, log/trace bases keep the primary aggregation as their v5 `order`
+key; metric bases translate editor primary-aggregation `orderBy` to v5 `__result` while preserving direction.
+Formulas use `__result` in both models. Never pass dashboard `orderBy` to `signoz_execute_builder_query`.
+Time-series top-N ranks groups over the whole window and can omit a short-lived local spike. Narrow filters/grouping
+if formula-input cardinality can exceed 10000.
+
 One rule `widgets-examples` does not call out, but
 `signoz_create_dashboard` enforces: **no `JSON.stringify` on
 arrays/objects** `layout`, `widgets`, `tags`, and `variables` are

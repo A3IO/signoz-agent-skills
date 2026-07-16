@@ -119,6 +119,10 @@ threshold tickle or flap) and quantifies the magnitude.
    start: `[fire_start - 30m, fire_start + 30m]`.
    - Use `signoz_execute_builder_query` for the alert's stored builder,
      formula, PromQL, or ClickHouse query envelope.
+   - Preserve positive bounds/order so Tier 1 reproduces the stored alert. If a formula input is below 10000, record truncation risk and compare at 10000 before ruling groups out.
+     For omissions, use 10000 on formula-input `builder_query` leaves and 100 on standalone/formula results. Find leaves from every formula expression, including `disabled: true` formulas, following references through the dependency graph.
+     This walk sets comparison bounds only; it does not prove deterministic formula-to-formula order. Use v5 `order`: `__result desc` for metrics/formulas or primary aggregation desc for logs/traces, never dashboard `orderBy`.
+     Time-series top-N ranks over the whole window and may omit a short-lived local spike.
 2. Compute:
    - **Peak value** during the fire window.
    - **Threshold breach magnitude**: `(peak - threshold) / threshold *

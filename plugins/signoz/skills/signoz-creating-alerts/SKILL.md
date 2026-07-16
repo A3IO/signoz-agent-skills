@@ -322,6 +322,22 @@ Run the full primary query (or formula) over the last hour:
   PromQL is not supported here; use `signoz_execute_builder_query`
   for that.
 
+For every persisted alert and dry-run, each `builder_query` and
+`builder_formula` spec must include a positive `limit` plus a non-empty Query
+Builder v5 `order`. Standalone queries and formula results use `limit: 100`.
+Every `builder_query` referenced by a formula uses `limit: 10000`, because
+SigNoz limits each component before formula evaluation; independently ranking
+the top 100 numerator and denominator groups can silently prevent an alert from
+firing. Find those inputs from every formula expression, including formulas
+with `disabled: true`, following formula references until all `builder_query`
+leaves are found. This dependency walk determines bounds only; it does not
+guarantee formula-to-formula evaluation order, so dry-run the complete composite
+payload. Use `__result desc` for metrics/formulas and the primary aggregation
+desc for logs/traces. This field is `order`, not dashboard editor `orderBy`.
+Preserve the fields when copying the validated query into the alert. If expected
+formula-input cardinality can exceed 10000, narrow the filters/grouping and tell
+the user completeness cannot otherwise be guaranteed.
+
 Compute how many evaluation points breached the proposed threshold.
 Surface in the preview as **"would have fired N times in the last 1h"**.
 A 1h window is too short to grade most alerts — only the upper extreme

@@ -178,6 +178,26 @@ display range by reflex; apply the reference's dry-run hygiene rules before
 widening or retrying after a timeout. Use representative variable values and
 keep editor aliases unchanged in saved state.
 
+Preserve or add explicit result bounds on every changed builder query/formula:
+dashboard state uses positive `limit` plus editor-model `orderBy`; the dry-run
+translation uses the same positive `limit` plus Query Builder v5 `order`. List
+and trace-request panels default to 100 rows ordered by timestamp desc (raw logs
+also id desc), but preserve a deliberate smaller positive list limit such as
+the panel pageSize. Standalone aggregate queries and formula outputs default to
+100 groups. Every base query referenced by a formula uses 10000 because base
+limits are applied before formula evaluation; raise an existing smaller bound
+unless it was an intentional pre-formula top-N selection. Find the complete
+base-query set by inspecting every formula expression, including formulas with
+`disabled: true`, and following formula references to all `builder_query`
+leaves. This dependency walk chooses bounds only; it does not establish
+deterministic formula-to-formula evaluation order, so dry-run the complete
+composite payload. Saved base queries order by their primary aggregation and
+saved formulas by `__result`; during dry-run translation, log/trace base queries
+retain the primary aggregation key, metric base queries translate it to
+`__result`, and formulas use `__result`. For time series, this top-N is chosen
+over the whole window, so a short-lived local spike can be omitted. Narrow
+filters/grouping if formula-input cardinality can exceed 10000.
+
 If the reference's safety gate finds an unsupported execution field, report the
 panel as unvalidated and continue only after explicit acceptance. Server or
 validation errors and unexpected empty results block unless explicitly accepted.

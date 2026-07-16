@@ -115,6 +115,14 @@ optional.
    inside the saved object.
    Choose `panelType` from the saved-view intent rather than inventing it from
    the execution envelope.
+   The copied queries must retain every positive `spec.limit` and v5
+   `spec.order` entry losslessly. Never translate them to dashboard `orderBy`.
+   Raw/list views use 100 rows (logs: timestamp/id desc; traces: timestamp
+   desc); standalone aggregate views and formula results use 100 groups.
+   Builder queries referenced by a formula use 10000 because their limits are
+   applied before evaluation. Order by the primary aggregation or `__result`
+   desc as appropriate. Time-series top-N ranks groups over the whole selected
+   window and can omit a short-lived local spike.
 4. **Enforce the signal rule** in every `builder_query` spec.
    - For `traces` / `logs` / `metrics`: `signal == sourcePage`. A
      `sourcePage:"traces"` view with `signal:"logs"` is a server-side error.
