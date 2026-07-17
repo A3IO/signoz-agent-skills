@@ -38,16 +38,14 @@ Do NOT use when:
 
 ### Step 1: Identify the target dashboard
 
-Determine which dashboard the user wants explained. If the user provides a
-dashboard name, UUID, or it is clear from context (e.g., an @mention or
-auto-context providing a dashboard resource), use that.
+Use a supplied UUID or a dashboard resource that includes its UUID directly.
+For any name-only request, call `signoz_list_dashboards` and resolve the name to
+a UUID. **Paginate through all pages** — follow `pagination.nextOffset` while
+`pagination.hasMore` is true. Never pass a dashboard name to
+`signoz_get_dashboard` or conclude it is missing from the first page.
 
-If the target dashboard is ambiguous:
-1. Call `signoz_list_dashboards` to list existing dashboards. **Paginate through
-   all pages** — check `pagination.hasMore` in the response. If `hasMore` is true,
-   call again with `offset` set to `pagination.nextOffset` and repeat until all
-   pages are exhausted. Never stop at the first page.
-2. Present matching candidates to the user and ask which one to explain.
+If multiple dashboards match, present the candidates and ask which one to
+explain.
 
 ### Step 2: Fetch the full dashboard configuration
 
@@ -73,8 +71,8 @@ the `tags` if they provide useful context.
 **2. Variables and filters** — Explain each variable:
 - Name and what it filters (e.g., "The `service_name` variable filters all panels
   to a specific service")
-- Type: DYNAMIC (auto-populated from telemetry), QUERY (SQL-driven dropdown), or
-  TEXTBOX (free-form input)
+- Type: DYNAMIC (auto-populated from telemetry), QUERY (query-driven dropdown),
+  CUSTOM (configured choices), TEXTBOX (free-form input), or CONSTANT (fixed)
 - Whether it supports multi-select and has "ALL" option
 - Note if any panels do NOT reference a variable in their filters — changing that
   variable dropdown would not affect those panels, which can be confusing
@@ -83,7 +81,8 @@ the `tags` if they provide useful context.
 `panelMap` structure (row widget titles are the section headers). If the dashboard
 has no rows (empty `panelMap`), walk through panels in layout order (by `y` then
 `x` position) and organize by logical theme. For each panel:
-- **Title** and **panel type** (graph, value, table, bar, pie, histogram, list)
+- **Title** and **panel type** (graph, value, table, bar, pie, histogram, list,
+  trace)
 - **What it shows** — interpret the query in plain language. For builder queries,
   explain the metric/data source, aggregation, filters, and groupBy. For formulas,
   explain each sub-query and how the formula combines them. For ClickHouse SQL or

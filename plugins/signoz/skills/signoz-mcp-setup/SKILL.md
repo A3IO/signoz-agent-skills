@@ -58,6 +58,9 @@ ask which client they want to configure.
 Silently determine the SigNoz MCP server state using the reference flow,
 **scoped to the client identified in Step 1**:
 
+Probe with `signoz_list_services(timeRange: "1h", limit: 1)`. Do not use docs
+tools (`signoz_search_docs` or `signoz_fetch_doc`) for this check.
+
 - For a Claude Code, Codex, or Cursor bundled plugin install, the reference
   flow's registration-file fallback applies.
 - For every other client — including Devin CLI — do not read or search for
@@ -71,7 +74,8 @@ Silently determine the SigNoz MCP server state using the reference flow,
 
 State outcomes:
 
-- **working** — continue with the user's original SigNoz request.
+- **working** — `signoz_list_services` succeeded; continue with the user's
+  original SigNoz request.
 - **not-setup** — run Step 3.
 - **configured-but-not-working** — if the user provided a new region or MCP URL,
   run Step 3. Otherwise tell them the SigNoz MCP server is configured but not
@@ -158,6 +162,18 @@ Bundled registration files live inside the installed plugin. Plugin updates can
 reset them to the placeholder; if that happens, rerun this setup skill. For a
 more durable native-client setup, use the relevant recipe in `client-configs.md`.
 
+For Codex, if the user says the endpoint reset again, keeps resetting, or asks
+for a durable/persistent setup, also create or update the native Codex MCP
+server entry after resolving the endpoint:
+
+```sh
+codex mcp add signoz --url <resolved-mcp-url>
+```
+
+This writes the user-level `[mcp_servers.signoz]` entry in Codex config and
+survives plugin cache updates. If editing TOML directly, preserve unrelated
+config and only set `url` for `mcp_servers.signoz`.
+
 For native client setup, use `client-configs.md`:
 
 - Edit an existing native client config only when the user named that client or
@@ -171,6 +187,17 @@ For native client setup, use `client-configs.md`:
 - Preserve unrelated MCP servers and existing client settings.
 - Keep the server name `signoz` in native client configs (the bundled Claude
   Code plugin file is the only one that uses the `mcp` key — do not rename it).
+
+### Auth and role diagnosis
+
+Backend RBAC classifies MCP failures from the API key's user role: reads need at
+least viewer; alert/dashboard writes need editor or admin; notification-channel
+management and API-key creation need admin. `401` / `UNAUTHORIZED` means the
+credential is missing, invalid, or expired: check configuration/presence
+first, then reauthenticate or reissue as appropriate. `403` /
+`PERMISSION_DENIED` means credentials are valid but under-privileged. Have a
+sufficiently privileged user act or issue a dedicated minimum-role key; never
+paste elevated keys into chat or tracked config.
 
 ### Step 5: Tell the user how to finish
 
@@ -188,8 +215,12 @@ client-specific authentication step:
   already-authenticated `signoz` server is connected.
 - **Claude Code** — restart Claude Code if the server does not appear, then run
   `/mcp`, select `signoz`, and complete authentication.
-- **Claude Desktop** — restart Claude Desktop or reconnect the custom
-  connector, then complete authentication when prompted.
+- **Claude Desktop** — for SigNoz Cloud or publicly reachable self-hosted HTTP,
+  reconnect the custom connector and complete authentication when prompted.
+  Private-network or localhost endpoints need local stdio because remote
+  connectors originate from Anthropic's cloud. Restart Claude Desktop after a
+  local stdio change so it reloads `claude_desktop_config.json`; that file is
+  only for command-based registration, not a hosted URL.
 - **Gemini CLI** — restart Gemini CLI if needed, then run `/mcp auth signoz`.
 - **Devin CLI** — start a new session so the updated `.devin/config.json` is
   picked up. For SigNoz Cloud, run `devin mcp login signoz` to complete OAuth.

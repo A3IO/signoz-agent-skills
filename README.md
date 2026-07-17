@@ -22,6 +22,7 @@ MCP clients.
 | [signoz-searching-docs](plugins/signoz/skills/signoz-searching-docs/SKILL.md) | SigNoz docs guidance for instrumentation, setup, querying, alerts, and APIs. |
 | [signoz-managing-views](plugins/signoz/skills/signoz-managing-views/SKILL.md) | Create, list, inspect, update, or delete SigNoz saved Explorer views (logs, traces, metrics) via the SigNoz MCP server. |
 | [signoz-setting-up-observability](plugins/signoz/skills/signoz-setting-up-observability/SKILL.md) | Orchestrate the full post-ingestion observability setup for a service — SLI/SLO capture, RED/USE exploration, focused dashboards, saved views, burn-rate and absent-data alerts, and a tuning loop — sequencing the single-artifact skills into one SLO-aware workflow. |
+| [signoz-reducing-telemetry-cost](plugins/signoz/skills/signoz-reducing-telemetry-cost/SKILL.md) | Investigate and reduce SigNoz telemetry ingestion cost and metric cardinality across metrics, logs, and traces through the Cost Meter, with dashboard-, alert-, and Infra-page-aware reduction recommendations. |
 
 ## Installation
 
@@ -102,6 +103,18 @@ Then, in a Codex session started from your project:
 
    or run `/mcp` in a session, then call any `signoz_*` tool. Restart Codex if
    the `signoz` server does not appear.
+
+The bundled `.mcp.json` lives inside Codex's versioned plugin cache, so plugin
+updates reinstall that file from this repository and can reset it to the
+placeholder. If you want the endpoint to persist across plugin updates, also
+add a native Codex MCP entry after resolving the endpoint:
+
+```sh
+codex mcp add signoz --url http://localhost:8000/mcp
+```
+
+Replace the URL with your SigNoz Cloud MCP URL or self-hosted HTTP `/mcp`
+endpoint. Verify with `codex mcp get signoz`.
 
 The Codex plugin declares `mcpServers: "./.mcp.json"`, so normal plugin installs
 do not need a separate native Codex MCP entry. To use in another repo, copy

@@ -10,10 +10,17 @@ plugins/signoz/skills/signoz-creating-dashboards/evals/evals.json
 
 ## How the suite was built
 
-1. **Mapped the skill surface** from `SKILL.md`, the SigNoz dashboard MCP resources (`signoz://dashboard/instructions`, `widgets-instructions`, `widgets-examples`, `query-builder-example`, `traces/query-builder-guide`, `clickhouse-{schema,example}-for-{metrics,traces,logs}`), and the SigNoz repo (`frontend/src/constants/queryBuilder.ts` for the panel-type enum).
+1. **Mapped the skill surface** from `SKILL.md`, the core dashboard resources,
+   `signoz://promql/instructions`, the metrics/traces/logs Query Builder guides,
+   and the six exact ClickHouse resources: `clickhouse-schema-for-metrics`,
+   `clickhouse-metrics-example`, `clickhouse-schema-for-traces`,
+   `clickhouse-traces-example`, `clickhouse-schema-for-logs`, and
+   `clickhouse-logs-example` under `signoz://dashboard/`.
 2. **Verified template-catalog claims** against [SigNoz/dashboards](https://github.com/SigNoz/dashboards) — every template reference in the evals points to a real file.
 3. **Verified data assumptions** against the live SigNoz instance via the MCP server (`signoz_list_dashboards`, `signoz_list_metrics`, `signoz_list_services`, `signoz_get_field_keys`, `signoz_get_field_values`, `signoz_aggregate_logs`). Evals that assume "no existing dashboard" were corrected to acknowledge the duplicates that are actually present.
 4. **Pairwise duplicate audit** across all evals — removed `custom-build-payment-pipeline` whose unique elements were strict subsets of other evals.
+5. **Offline branch fixtures** under `evals/files/` make pagination and prior-turn
+   simulations deterministic without depending on a live tenant's ordering.
 
 ## Surface covered
 
@@ -21,17 +28,17 @@ plugins/signoz/skills/signoz-creating-dashboards/evals/evals.json
 
 | Signal | Evals |
 |---|---|
-| metrics | 0, 1, 7, 9 |
-| traces | 8, 10, 12, 15, 16 |
-| logs | 14 |
+| metrics | 0, 1, 7, 9, 18, 21 |
+| traces | 8, 10, 12, 15, 16, 17, 19, 23 |
+| logs | 14, 20, 24 |
 
 ### Panel types (from `PANEL_TYPES` enum in `frontend/src/constants/queryBuilder.ts`)
 
 | Panel type | Evals |
 |---|---|
-| graph (timeseries) | 7, 9, 10, 12, 14, 17 |
+| graph (timeseries) | 7, 9, 10, 12, 14, 17, 19, 21, 23 |
 | value | 9, 14, 16 |
-| table | 14, 16 |
+| table | 14, 16, 20, 22, 24 |
 | list | 15 |
 | bar | 16 |
 | pie | 16 |
@@ -46,15 +53,16 @@ plugins/signoz/skills/signoz-creating-dashboards/evals/evals.json
 | Duplicate found → user picks "create new" → template import + no-data warning | 1 |
 | Duplicate found → user picks "create new" → template import → server failure → fallback | 13 |
 | Duplicate found → user picks "modify" → hand off to `signoz-modifying-dashboards` | 11 |
+| Duplicate found on a later page → present choices before any write | 18 |
 | Broad/ambiguous request → present multiple template options | 2 |
 | Vague request → emit `needs_input` / clarify scope | 5 |
-| No template match → custom build | 6, 7, 8, 9, 10, 12, 14, 15, 16, 17 |
+| No template match → custom build | 6, 7, 8, 9, 10, 12, 14, 15, 16, 17, 19, 20, 21, 22, 23, 24 |
 
 ### Guardrails exercised
 
 | Guardrail | Eval(s) |
 |---|---|
-| Always paginate `signoz_list_dashboards` before any write | 0, 1, 11, 13 |
+| Always paginate `signoz_list_dashboards` before any write | 0, 1, 11, 13, 18 |
 | `list_dashboard_templates` before custom build | 6, 7, 8, 9, 10, 14, 15, 16, 17 |
 | No-data probe before save | 1, 6, 14 |
 | Don't shortcut to a near-neighbour template | 6 |
@@ -66,11 +74,18 @@ plugins/signoz/skills/signoz-creating-dashboards/evals/evals.json
 | Value panel must NOT have `groupBy` | 14, 16 |
 | Pie panel must have `groupBy` AND `legend` | 16 |
 | Error-rate formula `A*100/B` with `disabled:true` on base queries | 9, 16 |
+| Dashboard `groupBy` aliases stay in create payloads; dry-runs use canonical v5 fields | 10 |
+| Dashboard filters/limits/order/select fields/formulas translate to canonical execution fields | 9, 14, 15, 20, 22, 24 |
+| Non-empty dashboard HAVING arrays stay saved but block parity claims because frontend execution drops them | 20 |
+| Trace operators become raw-preserved sibling `builder_trace_operator` envelopes | 23 |
+| Unsupported execution-affecting fields block false-positive dry-run success | 20, 21, 22 |
 | Non-default time range for SLO windows (28d) | 9 |
 | Variable-application prompt before injecting `$var` into panels | 17 |
-| `DYNAMIC` variable shape (`DynamicVariablesAttribute` / `DynamicVariablesSource`) | 17 |
+| Selected-panel variable wiring and dry-run | 19 |
+| `DYNAMIC` variable shape (`DynamicVariablesAttribute` / `DynamicVariablesSource`) | 17, 19 |
 | No `JSON.stringify` on `layout` / `widgets` / `variables` | 12 |
-| Per-widget required fields (`id`, `panelTypes`, `title`, `query`, `selectedLogFields`, `selectedTracesFields`, `thresholds`, `contextLinks`) | 12, 14, 15 |
+| Per-widget required fields and active query payload | 12, 14, 15 |
+| 12-column bounds and exact `panelMap` membership/layout parity | 16 |
 | Scope boundary — don't call `signoz_update_dashboard` from this skill | 11 |
 | Surface import failures, don't silently retry | 13 |
 
@@ -86,22 +101,29 @@ plugins/signoz/skills/signoz-creating-dashboards/evals/evals.json
 | 7 | `custom-build-kafka-consumer-pressure` | "Don't ask questions, I'm in incident" — agent must still discover + probe | metrics | graph | discovery + probe under pressure, real attribute keys (e.g. `client-id`), reject invented shorthand |
 | 8 | `custom-build-checkout-funnel-span-attributes` | Span-attribute-driven business KPIs (orders, revenue, card-type) | traces | graph, pie | `signoz_get_field_keys signal=traces` discovery, `signoz_aggregate_traces` (not metrics), `sum(app.order.amount)`, span-tag groupBy |
 | 9 | `custom-build-slo-error-budget-formula` | SLO availability + error-budget burn-rate; builder mode only | metrics | graph, value | error-rate formula, non-default 28d time range, `service.name` (dotted, resource), no PromQL |
-| 10 | `custom-build-multi-service-user-journey` | Per-hop latency + error rate across multiple services | traces | graph | `service.name` discovery (`signoz_list_services` / `signoz_get_field_values`), IN-list filter, per-service `groupBy=service.name`, error-rate formula |
+| 10 | `custom-build-multi-service-user-journey` | Per-hop latency + error rate across multiple services | traces | graph | `service.name` discovery, IN-list filter, per-service `groupBy`, error-rate formula, dashboard-to-v5 dry-run field translation |
 | 11 | `duplicate-modify-hands-off` | Existing dashboard + user picks "modify" → handoff | (any) | n/a | scope boundary — no `signoz_update_dashboard` from this skill |
-| 12 | `shape-check-no-stringify` | Top-level fields are native JSON, every widget has required keys | traces | graph | `layout` / `widgets` / `variables` not stringified, query has `queryType` + `builder` + `promql` + `clickhouse_sql` sub-keys |
+| 12 | `shape-check-no-stringify` | Top-level fields are native JSON, every widget has required keys | traces | graph | `layout` / `widgets` / `variables` not stringified, query has `queryType` + complete active Builder payload |
 | 13 | `import-failure-falls-back-to-custom` | Duplicate-check → "create new" → template import fails → surface error + fallback | metrics | (template) | no silent retry, no fabricated payload, custom-build fallback or stop |
 | 14 | `custom-build-logs-signal-volume-and-errors` | Logs-signal dashboard with severity breakdown | logs | graph, value, table | `dataSource=logs`, `severity_text` (not `severity`/`level`), value-no-`groupBy`, `selectedLogFields` per widget |
 | 15 | `custom-build-list-panel-selectColumns-required` | Recent-error-traces list panel | traces | list | `selectColumns` uses `name` not `key`, each entry has `fieldContext` + `signal`, `orderBy` + `pageSize` set, no `groupBy` on lists |
 | 16 | `custom-build-multi-panel-types-mixed` | One dashboard exercising row + value + pie + bar + table | traces | row, value, pie, bar, table | per-panel-type shape rules (value-no-`groupBy`, pie-needs-legend, bar-not-graph, table-`as`-aliases), formula with `disabled:true`, KPI-row layout |
-| 17 | `custom-build-variable-application-prompt` | User asks for `service.name` dropdown; one panel is intentionally global | traces | graph | `DYNAMIC` variable shape, ask-which-panels-before-injection, don't over-filter the global panel |
+| 17 | `custom-build-variable-application-prompt` | User asks for `service.name` dropdown; agent stops at panel-scope clarification | traces | graph | `DYNAMIC` variable shape, ask before injection |
+| 18 | `duplicate-dashboard-on-second-page` | Matching dashboard appears only after following `pagination.nextOffset` | metrics | n/a | later-page duplicate detection, no write before user choice |
+| 19 | `custom-build-variable-application-selected-panels` | Follow-up selects two panels and keeps the global panel unfiltered | traces | graph | targeted `$service_name` wiring, representative-value dry-runs |
+| 20 | `custom-build-having-array-validation-gap` | Structured filter translation plus the saved HAVING-array runtime gap | logs | table | `filters` → `filter.expression`; diagnostic HAVING expression is non-parity; explicit acceptance gate |
+| 21 | `unsupported-builder-function-blocks-lossy-validation` | Current execution schema cannot represent a requested Builder function | metrics | graph | surface unsupported field; never claim a stripped dry-run passed |
+| 22 | `formula-order-limit-schema-gate` | Formula order/limit unsupported by current execution schema | (builder) | table | preserve saved formula; block or explicitly accept unvalidated state |
+| 23 | `trace-operator-sibling-envelope-contract` | Trace-operator dashboard/editor JSON to V5 execution-envelope translation | traces | graph | base A/B plus raw-preserved sibling `builder_trace_operator` T1 in the actual dry-run call |
+| 24 | `saved-not-in-to-execution-not-in` | Logs table excluding checkout and frontend services | logs | table | discover the log-side service field; saved `NOT_IN` maps to execution `NOT IN`; canonical non-empty `groupBy`; short representative 30-60-minute dry-run window, not a display range |
 
 ## Intentionally uncovered
 
 | Surface | Reason |
 |---|---|
 | `histogram` panel | Niche distribution panel; low-risk shape |
-| PromQL widgets | Skill explicitly forbids PromQL in builder mode (eval 9 tests the negative); not a primary user path for this skill |
-| Raw ClickHouse SQL panels | Owned by sibling skill `signoz-writing-clickhouse-queries`; out of scope per `SKILL.md` |
+| PromQL widgets | Supported via `signoz://promql/instructions`; no dedicated creation eval yet |
+| Raw ClickHouse SQL panels | Supported via the signal-specific MCP resources and `signoz-writing-clickhouse-queries`; no dedicated creation eval yet |
 | `CUSTOM` / `TEXTBOX` / `QUERY` variable types | `DYNAMIC` is the recommended default per `signoz://dashboard/instructions`; eval 17 covers the recommended path |
 | Threshold formats (`Text` / `Background`) | Edge feature — failure mode is cosmetic, not data-correctness |
 

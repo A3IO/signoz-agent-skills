@@ -35,31 +35,63 @@ relative description ("24h before fire").
 For each neighbor signal, run the same builder query twice — once per
 window. The only thing that changes is `start` / `end`.
 
-Pseudo-shape (the actual MCP tool input shape is in the SigNoz MCP
-docs, but the conceptual fields):
+This is a complete tool-argument example for trace p99 latency. Replace the
+Unix-millisecond `start` / `end`, treat `stepInterval: 60` as the
+window-appropriate seconds placeholder, and adapt the `spec` using the MCP
+guide for the chosen signal. Keep the outer `query`, `formatOptions`, and
+`variables` fields.
 
-```jsonc
+```json
 {
-  "compositeQuery": {
-    "queryType": "builder",
-    "panelType": "graph",
-    "queries": [
-      {
-        "type": "builder_query",
-        "spec": {
-          "name": "A",
-          "signal": "<traces|logs|metrics>",
-          "aggregations": [ /* per neighbor-signals.md */ ],
-          "filter": { "expression": "<resource attribute filter from the alert>" },
-          "groupBy": [ /* mirror the alert's groupBy when relevant */ ]
+  "query": {
+    "schemaVersion": "v1",
+    "start": 1756386047000,
+    "end": 1756387847000,
+    "requestType": "time_series",
+    "compositeQuery": {
+      "queries": [
+        {
+          "type": "builder_query",
+          "spec": {
+            "name": "A",
+            "signal": "traces",
+            "disabled": false,
+            "stepInterval": 60,
+            "limit": 100,
+            "order": [
+              {"key": {"name": "p99(duration_nano)"}, "direction": "desc"}
+            ],
+            "having": { "expression": "" },
+            "filter": { "expression": "service.name = 'checkout'" },
+            "aggregations": [
+              { "expression": "p99(duration_nano)" }
+            ],
+            "groupBy": []
+          }
         }
-      }
-    ]
-  },
-  "start": "<window start, RFC3339 UTC>",
-  "end":   "<window end, RFC3339 UTC>"
+      ]
+    },
+    "formatOptions": {
+      "formatTableResultForUI": false,
+      "fillGaps": false
+    },
+    "variables": {}
+  }
 }
 ```
+
+Keep the same positive limit and Query Builder v5 `order` in the fire and
+baseline requests. For time series, the limit ranks groups over the whole
+window, so a short-lived local spike can be outside the top N. Dashboard
+`orderBy` is not valid in this execution payload. For a formula alert, first
+replay the stored component limits exactly. If any formula input is below
+10000, run a second fire/baseline comparison with that input raised to 10000;
+base limits are applied before formula evaluation, so independent top-N inputs
+can hide the group that should have fired. Find inputs by inspecting every
+formula expression, including formulas with `disabled: true`, and following
+formula references to all `builder_query` leaves. This dependency walk changes
+only the comparison bounds; it does not prove deterministic formula-to-formula
+evaluation order.
 
 ## Computing the delta
 
@@ -84,7 +116,7 @@ In the Tier 2 output for each signal, present:
 
 ```
 - p99 latency: 4.1s vs 320ms baseline (+1180%)
-  query: signoz_execute_builder_query — p99(durationNano) on
+  query: signoz_execute_builder_query — p99(duration_nano) on
          service.name = checkout, fire window 14:32-14:40 UTC vs
          baseline 14:32-14:40 UTC (24h prior)
 ```
@@ -114,13 +146,14 @@ Skip baseline comparison and call out the limitation if:
 Tier 3 does not require a baseline — the question is "what happened",
 not "what changed". Run a single fire-window query for each:
 
-- `signoz_search_traces` with the resource filter + `hasError = true`.
-  Cap at 20. Group by `name` (operation) and surface the top 3 by
-  count with one representative `trace_id` each.
+- `signoz_search_traces` with the resource filter + `has_error = true`.
+  Cap at 20. Group the sample by `name` (operation) and `status_message`, and
+  surface the top 3 with one representative `trace_id` each.
 - `signoz_search_logs` with the resource filter +
   `severity_text IN ('ERROR', 'FATAL')`. Cap at 20 most recent. Group
   by message pattern (or `exception.type`) and surface the top 3.
-- For deep drill on one trace, `signoz_get_trace_details(trace_id)`
-  extracts span-level attributes (DB statement, peer service, status
-  code) — useful when the operation name alone doesn't identify the
-  failing call.
+- For deep drill on one trace, map the search row's `trace_id` to the details
+  input: `signoz_get_trace_details` with `{ "traceId": "<returned trace_id>",
+  "start": "<fire_start_ms>", "end": "<fire_end_ms>" }`.
+  It extracts span-level attributes (DB statement, peer service, status code)
+  when the operation name alone doesn't identify the failing call.

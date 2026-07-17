@@ -20,11 +20,13 @@ Antigravity CLI, or OpenCode, read
 Silently determine `signoz-server-state`, **only after the client is known**
 (see `SKILL.md` Step 1 — identify the client before checking state):
 
-1. If `signoz_*` MCP tools are available, try a lightweight read-only
-   call such as `signoz_search_docs` for `mcp setup` or
-   `signoz_list_services` with a small lookback.
-2. If the call returns SigNoz-specific content, state is **working**.
-3. If the call fails, returns no tools, or only generic/empty content:
+1. If `signoz_*` MCP tools are available, call
+   `signoz_list_services(timeRange: "1h", limit: 1)`. Do not use
+   docs tools (`signoz_search_docs` or `signoz_fetch_doc`) as connectivity
+   probes.
+2. If the call succeeds, including with an empty service list, state is
+   **working**.
+3. If the call fails, returns no tools, or cannot be attempted:
    - **Claude Code, Codex, or Cursor bundled plugin install** — read the
      plugin registration files below.
    - **Any other client** — do not read or file-search for the bundled
@@ -104,12 +106,17 @@ the endpoint, that value can override this default. If this setup skill updates
 the default but the client still connects to the old endpoint, tell the user to
 clear the explicit plugin setting and reload the client.
 
-### Update behavior
+### Update behavior and durable Codex config
 
 These bundled files live inside the installed plugin. Plugin updates can reset
 them to the placeholder. If the `signoz` server returns to **not-setup** after
 an update, rerun `signoz-mcp-setup`. For durable native client configuration,
 use the client-specific recipes in `client-configs.md`.
+
+For Codex users who report repeated resets or ask for a persistent setup, add
+or update the native Codex MCP entry as well as the bundled `.mcp.json`. Use
+`codex mcp add signoz --url <resolved-mcp-url>` or the equivalent
+`[mcp_servers.signoz]` TOML entry, then verify with `codex mcp get signoz`.
 
 ## Endpoint Mapping
 

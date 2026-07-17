@@ -63,7 +63,7 @@ If the alert name is fuzzy, this skill is **best-effort** (read-only):
    fire, tell me."
 3. Proceed.
 
-If the alert has never fired in the lookback window, **stop**: there is
+If no firing transition exists in the queried lookback window, **stop**: there is
 nothing to investigate. Respond with:
 > "Alert '[name]' has not fired in the last 7d, so there is no fire
 > window to investigate. Use `signoz-explaining-alerts` to walk through
@@ -83,16 +83,32 @@ alerts.
    not given.
 2. Call `signoz_get_alert` for the full rule config — needed to know
    what query, threshold, and resource scope the alert evaluated.
-3. Call `signoz_get_alert_history` with a 7d lookback. From the
-   response:
-   - **Pick the fire window**. Default to the most recent fire. If the
-     user passed an explicit time window via `$ARGUMENTS[1]`, honor it.
-   - **Note the fire pattern**:
+3. First call `signoz_get_alert_history` with `timeRange: "7d"` and
+   `order: "desc"`; omit `state` so the timeline includes firing and inactive
+   transitions. Continue only when `data.nextCursor` exists (the completeness
+   note also reports `hasMore: true`). Pass it as `cursor`, replace `timeRange`
+   with the note's resolved absolute `start` and `end`, and preserve the same
+   state/filter (including omission) and order. Stop when `nextCursor` is absent
+   / the note reports `hasMore: false`; never use `offset` or page fullness.
+   If a later intentional state filter means "resolved" / "recovered", use
+   `inactive`. The enum is `inactive|pending|recovering|firing|nodata|disabled`;
+   `recovering` is a transient keep-firing state, not resolution.
+   Pattern analysis needs the complete transition set. Rows are emitted per
+   label-group `fingerprint`; do not interleave them. From the response:
+   - **Build rule-wide incident windows** from distinct rows where
+     `overallStateChanged: true`: an `overallState: "firing"` transition opens
+     an incident; the next `overallState: "inactive"` closes it. Deduplicate
+     matching timestamps and sort by `unixMilli` ascending before pairing.
+     Default to the most recent incident unless `$ARGUMENTS[1]` selects another.
+   - **Partition affected series by `fingerprint`** and retain each row's
+     labels. Use only `stateChanged: true` rows to decide when that group fired
+     and resolved, and which group should scope Tier 1–3 queries.
+   - **Note the fire pattern** from rule-wide transitions or one named fingerprint:
      - `one-off` → single fire with a long quiet period before/after.
      - `sustained` → fires that stayed firing for ≥ 1 evaluation cycle.
      - `flapping` → ≥ 3 fires within a 1h window, alternating fire/resolve.
      - `recurring` → fires at regular intervals (cron-like, e.g., every hour).
-   - The pattern tells you what to expect from tiers 2/3.
+   - Never infer flapping from different fingerprints. The pattern guides tiers 2/3.
 
 ### Step 2: Tier 1 — what fired and how hard
 
@@ -101,13 +117,18 @@ threshold tickle or flap) and quantifies the magnitude.
 
 1. Re-run the alert's primary query over a window centered on the fire
    start: `[fire_start - 30m, fire_start + 30m]`.
-   - Use `signoz_execute_builder_query` for builder/formula alerts.
-   - Use `signoz_query_metrics` for PromQL alerts.
+   - Use `signoz_execute_builder_query` for the alert's stored builder,
+     formula, PromQL, or ClickHouse query envelope.
+   - Preserve positive bounds/order so Tier 1 reproduces the stored alert. If a formula input is below 10000, record truncation risk and compare at 10000 before ruling groups out.
+     For omissions, use 10000 on formula-input `builder_query` leaves and 100 on standalone/formula results. Find leaves from every formula expression, including `disabled: true` formulas, following references through the dependency graph.
+     This walk sets comparison bounds only; it does not prove deterministic formula-to-formula order. Use v5 `order`: `__result desc` for metrics/formulas or primary aggregation desc for logs/traces, never dashboard `orderBy`.
+     Time-series top-N ranks over the whole window and may omit a short-lived local spike.
 2. Compute:
    - **Peak value** during the fire window.
    - **Threshold breach magnitude**: `(peak - threshold) / threshold *
      100` for "above" alerts, inverted for "below".
-   - **Fire duration**: how long the breach lasted.
+   - **Fire duration**: the rule's overall firing→inactive interval, or the
+     selected fingerprint's interval for a group-scoped investigation. Say which.
    - **Pre-fire baseline**: average value in the 30m before fire start.
 3. **Early-stop gate**: if the breach magnitude is < 10% over the
    threshold AND the fire duration is < 1 evaluation window, classify
@@ -157,12 +178,12 @@ specific failing operations.
 1. **Traces** (if the alert is service-scoped and traces are
    available):
    - Call `signoz_search_traces` for the fire window with filter:
-     `service.name = <scope>` AND `hasError = true`. Cap at top 20.
-   - Group results by `name` (operation) and `error_message`. Surface
-     the top 3 by frequency with a representative trace ID for each.
-   - Optionally call `signoz_get_trace_details` on one representative
-     to extract specific span attributes (DB statement, downstream URL,
-     status code).
+     `service.name = <scope>` AND `has_error = true`. Cap at top 20.
+   - Group by `name` and `status_message`. Surface the sample's top 3 with one
+     trace ID each; do not call a 20-row sample count full-window frequency.
+   - Optionally call `signoz_get_trace_details` for span attributes. Pass the
+     search row's `trace_id` as `traceId` **plus the same absolute fire-window
+     `start` and `end`**; otherwise the 6h default misses older incidents.
 
 2. **Logs** for the fire window:
    - Call `signoz_search_logs` with filter:
@@ -338,7 +359,7 @@ the full picture. The chip surface is capped; the prose is not.
    - Throughput: -42% (drop).
    - Downstream `payments` error rate: 18% vs 0.2% baseline (+8900%).
    - CPU/memory: flat (no resource pressure).
-5. **Tier 3**: traces for `service.name = checkout, hasError = true`
+5. **Tier 3**: traces for `service.name = checkout, has_error = true`
    in the fire window — top operation `POST /checkout/submit`, top
    error message "context deadline exceeded calling payments-api".
    30 traces, all hitting the same downstream URL. Logs show
