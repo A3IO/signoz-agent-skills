@@ -15,6 +15,7 @@ on:
       - 'LICENSE'
       - 'scripts/check_plugin_versions.py'
       - 'scripts/package_agent_plugin.py'
+      - '.github/workflows/publish-agent-plugin.yml'
       - '.github/workflows/validate-agent-plugin.yml'
   workflow_dispatch:
 
