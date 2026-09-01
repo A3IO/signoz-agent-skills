@@ -1,6 +1,6 @@
 {
   "name": "signoz",
-  "version": "2026.08.06",
+  "version": "2026.08.24",
   "description": "Official SigNoz plugin for MCP setup, docs, queries, dashboards, and alerts",
   "author": {
     "name": "SigNoz",
@@ -18,7 +18,7 @@
     "tracing",
     "logging"
   ],
-  "mcpServers": "./.mcp.json",
+  "mcpServers": "./mcp.json",
   "skills": "./skills/",
   "interface": {
     "displayName": "SigNoz",
